@@ -1,0 +1,161 @@
+#include <Wire.h> 
+#include <LiquidCrystal_I2C.h>
+#include <LiquidCrystal.h>
+#include "RTClib.h"
+
+#define setAlarm 2
+#define plus1 3
+#define minus1 4
+#define buzzer 5
+#define shock 6
+
+int Budilka_ure=0;
+int Budilka_minute=0;
+int menu=0;
+byte lastButtonState = LOW;
+byte plusAliMinus = LOW;
+
+byte zvoncek[8] =
+{
+0b00000,
+0b00000,
+0b00000,
+0b00100,
+0b01110,
+0b01110,
+0b11111,
+0b00100
+};
+
+LiquidCrystal_I2C lcd(0x27,16,2);  // 0x27 je LCD naslov, 16 je število znakov
+//v vrstici, 2 pa število vrstic
+
+RTC_DS3231 rtc;
+
+void setup()
+{
+  Wire.begin();
+  Serial.begin(9600);
+  delay(3000);
+  lcd.init();
+  lcd.createChar(0, zvoncek);
+
+  pinMode(setAlarm, INPUT);
+  pinMode(plus1, INPUT);
+  pinMode(minus1, INPUT);
+  pinMode(buzzer, OUTPUT);
+  pinMode(shock, OUTPUT);
+
+if (! rtc.begin()) {//preverimo povezavo z RTC modulom
+    Serial.println("Couldn't find RTC");
+    while (1);
+  }
+
+  if (rtc.lostPower()) {//preverimo, če je rtc izgubil sled časa
+    Serial.println("RTC lost power, lets set the time!");
+  rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));//nastavimo trenuten čas
+  //iz računalnika
+  }
+}
+
+
+void loop()
+{
+  DateTime now = rtc.now();
+  
+  if(menu==0){
+      lcd.clear();
+      lcd.setCursor(0,0);//(stolpec, vrstica)
+      if(now.hour()<10) lcd.print("0");
+      lcd.print(now.hour(), DEC); 
+      lcd.print(":"); 
+      if(now.minute()<10) lcd.print("0");
+      lcd.print(now.minute(), DEC); 
+      lcd.print(":"); 
+      if(now.second()<10) lcd.print("0");
+      lcd.print(now.second(), DEC); 
+      lcd.setCursor(0,1);//(stolpec, vrstica)
+      if(now.day()<10) lcd.print("0");
+      lcd.print(now.day(), DEC);
+      lcd.print("/");
+      if(now.month()<10) lcd.print("0");
+      lcd.print(now.month(), DEC);  
+      lcd.print("/");
+      lcd.print(now.year(), DEC);
+
+      if(rtc.alarmFired(1)){
+        rtc.clearAlarm(1);
+        if(plusAliMinus==HIGH){
+        int counter=0;
+        while(counter!=30){
+        tone(buzzer,1000);
+        digitalWrite(shock,HIGH);
+        delay(1000);
+        noTone(buzzer);
+        digitalWrite(shock,LOW);
+        delay(500);
+        if(digitalRead(setAlarm)==HIGH)break;
+        }
+      }
+      }
+      if(digitalRead(plus1)==HIGH){
+        rtc.setAlarm1(DateTime(2021, 4, 5, Budilka_ure, Budilka_minute, 0), DS3231_A1_Hour);
+        plusAliMinus=HIGH;
+      }
+      if(digitalRead(minus1)==HIGH){
+        plusAliMinus=LOW;
+      }
+      if(plusAliMinus==HIGH){
+        lcd.setCursor(14,0);
+        lcd.write(byte(0));
+      }
+      else{
+        lcd.setCursor(14,0);
+        lcd.print("");
+      }
+      byte buttonState=digitalRead(setAlarm);
+      if(lastButtonState!=buttonState){
+          lastButtonState=buttonState;
+        if(lastButtonState==HIGH)menu++;
+        }
+      
+      delay(1000);
+  }
+
+  else{
+        byte buttonState=digitalRead(setAlarm);
+      if(lastButtonState!=buttonState){
+          lastButtonState=buttonState;
+        if(lastButtonState==HIGH)menu++;
+        }
+        
+      lcd.clear();
+      lcd.setCursor(0,0);
+      lcd.print("SET ALARM");
+      lcd.setCursor(0,1);
+      if(Budilka_ure<10) lcd.print("0");
+      lcd.print(Budilka_ure, DEC);
+      lcd.print(":");
+      if(Budilka_minute<10) lcd.print("0");
+      lcd.print(Budilka_minute, DEC);
+      if((digitalRead(plus1)==HIGH)&&(menu==1))Budilka_ure++;
+      if((digitalRead(minus1)==HIGH)&&(menu==1))Budilka_ure--;
+      if(Budilka_ure==24)Budilka_ure=0;
+      if(Budilka_ure==-1)Budilka_ure=23;
+      if((digitalRead(plus1)==HIGH)&&(menu==2))Budilka_minute++;
+      if((digitalRead(minus1)==HIGH)&&(menu==2))Budilka_minute--;
+      if(Budilka_minute==60){Budilka_minute=0;Budilka_ure++;}
+      if(Budilka_minute==-1){Budilka_minute=59;Budilka_ure--;}
+      if(menu==3){
+        rtc.setAlarm1(DateTime(2021, 4, 5, Budilka_ure, Budilka_minute, 0), DS3231_A1_Hour);
+        menu=0;
+        plusAliMinus=HIGH;
+      }
+      delay(100);
+      
+      
+      
+      
+  }
+  }
+  
